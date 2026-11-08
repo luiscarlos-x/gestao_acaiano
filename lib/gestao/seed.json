@@ -1,0 +1,176 @@
+{
+  "entries": [],
+  "stock": [
+    {
+      "id": "ins-1",
+      "name": "Açaí",
+      "group": "Ingredientes",
+      "unit": "L",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-2",
+      "name": "Banana",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-3",
+      "name": "Kiwi",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-4",
+      "name": "Morango",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-5",
+      "name": "Castanha triturada",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-6",
+      "name": "Tubetes wafer",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-7",
+      "name": "Leite em pó",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-8",
+      "name": "Biscoito Negresco",
+      "group": "Ingredientes",
+      "unit": "un",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-9",
+      "name": "Paçoca",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-10",
+      "name": "Guaraná em pó",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-11",
+      "name": "Colotoreti",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-12",
+      "name": "Leite condensado",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-13",
+      "name": "Cereal de chocolate",
+      "group": "Ingredientes",
+      "unit": "kg",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-14",
+      "name": "Cobertura de morango",
+      "group": "Ingredientes",
+      "unit": "L",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-15",
+      "name": "Goma Kuky",
+      "group": "Ingredientes",
+      "unit": "un",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-16",
+      "name": "Copos",
+      "group": "Embalagens",
+      "unit": "un",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-17",
+      "name": "Tampas",
+      "group": "Embalagens",
+      "unit": "un",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-18",
+      "name": "Colheres",
+      "group": "Embalagens",
+      "unit": "un",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    },
+    {
+      "id": "ins-19",
+      "name": "Bisnagas",
+      "group": "Embalagens",
+      "unit": "un",
+      "qty": null,
+      "minimum": null,
+      "target": null
+    }
+  ]
+}
