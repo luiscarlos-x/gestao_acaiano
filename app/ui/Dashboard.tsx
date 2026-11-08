@@ -25,6 +25,7 @@ import {
   AlertCircle,
   LoaderCircle,
   ShieldCheck,
+  LogOut,
 } from "lucide-react";
 import type { Entry, Item, State } from "../../lib/gestao/model";
 import {
@@ -195,7 +196,7 @@ function normalize(s: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
-export default function Dashboard({ initial }: { initial: State | null }) {
+export default function Dashboard({ initial, userEmail }: { initial: State | null; userEmail?: string }) {
   const [data, setData] = useState<State | null>(initial),
     [page, setPage] = useState<PageId>("overview"),
     [mobile, setMobile] = useState(false),
@@ -407,9 +408,13 @@ export default function Dashboard({ initial }: { initial: State | null }) {
           </div>
           <div>
             <b>Açaíano</b>
-            <small>Teresina, PI</small>
+            <small>{userEmail || "Teresina, PI"}</small>
           </div>
-          <ShieldCheck size={15} className="shield" aria-label="Área privada" />
+          <form action="/auth/signout" method="POST" style={{ marginLeft: "auto" }}>
+            <button type="submit" className="iconbtn" aria-label="Sair" title="Sair da conta">
+              <LogOut size={15} />
+            </button>
+          </form>
         </div>
       </aside>
       <div className="workspace">

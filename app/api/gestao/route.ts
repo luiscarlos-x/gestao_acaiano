@@ -1,12 +1,14 @@
-import { getChatGPTUser } from "../../chatgpt-auth";
+import { createClient } from "../../../lib/supabase/server";
 import { readState, mutate, InputError } from "../../../lib/gestao/storage";
 export const dynamic = "force-dynamic";
 async function handle(req: Request, write: boolean) {
   try {
-    const user = await getChatGPTUser();
-    const owner =
-      user?.userId ??
-      (process.env.NODE_ENV === "development" ? "local-preview" : null);
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const owner = user?.id ?? null;
     if (!owner)
       return Response.json(
         { error: "Entre com sua conta para acessar a gestão." },

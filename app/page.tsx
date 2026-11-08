@@ -1,17 +1,22 @@
 import Dashboard from "./ui/Dashboard";
-import { getChatGPTUser } from "./chatgpt-auth";
+import { createClient } from "../lib/supabase/server";
+import { redirect } from "next/navigation";
 import { readState } from "../lib/gestao/storage";
 export const dynamic = "force-dynamic";
 export default async function Page() {
-  const user = await getChatGPTUser();
-  const owner =
-    user?.userId ??
-    (process.env.NODE_ENV === "development" ? "local-preview" : null);
-  let initial = null;
-  if (owner) {
-    try {
-      initial = await readState(owner);
-    } catch {}
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
   }
-  return <Dashboard initial={initial} />;
+
+  const owner = user.id;
+  let initial = null;
+  try {
+    initial = await readState(owner);
+  } catch {}
+  return <Dashboard initial={initial} userEmail={user.email ?? ""} />;
 }

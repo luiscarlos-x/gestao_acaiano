@@ -1,61 +1,130 @@
-import { env } from "cloudflare:workers";
 import { z } from "zod";
 import seedData from "./seed.json";
 import { categories, defaultPlan, methods, units } from "./model";
 import type { Entry, Item, Plan, State } from "./model";
+import { createClient as createServerSupabaseClient } from "../supabase/server";
+import { createClient as createDirectSupabaseClient } from "@supabase/supabase-js";
 
 const seed: { entries: Entry[]; stock: Item[] } = seedData;
 
-const database = () => {
-  if (!env.DB) throw new Error("Banco de dados indisponível.");
-  return env.DB;
-};
-export async function readState(owner: string): Promise<State> {
-  const db = database();
-  if (
-    !(await db
-      .prepare("SELECT 1 FROM workspaces WHERE owner=?")
-      .bind(owner)
-      .first())
-  ) {
-    const source = [
-      ...seed.entries.map((r) => ["entry", r.id, JSON.stringify(r)]),
-      ...seed.stock.map((r) => ["item", r.id, JSON.stringify(r)]),
-    ];
-    const init = source.map(([kind, id, value]) =>
-      db
-        .prepare(
-          "INSERT INTO records (owner,kind,id,value) SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM workspaces WHERE owner=?)",
-        )
-        .bind(owner, kind, id, value, owner),
+async function getSupabase() {
+  try {
+    return await createServerSupabaseClient();
+  } catch {
+    return createDirectSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     );
-    await db.batch([
-      ...init,
-      db
-        .prepare(
-          "INSERT OR IGNORE INTO workspaces(owner,revision) VALUES (?,0)",
-        )
-        .bind(owner),
-    ]);
   }
-  const [meta, rows] = await db.batch([
-    db.prepare("SELECT revision FROM workspaces WHERE owner=?").bind(owner),
-    db.prepare("SELECT kind,value FROM records WHERE owner=?").bind(owner),
-  ]);
-  const state: State = {
-    revision: Number((meta.results[0] as { revision: number }).revision),
-    entries: [],
-    stock: [],
-    plan: defaultPlan,
-  };
-  for (const r of rows.results as { kind: string; value: string }[]) {
-    const v = JSON.parse(String(r.value));
-    if (r.kind === "entry") state.entries.push(v);
-    if (r.kind === "item") state.stock.push(v);
-    if (r.kind === "plan") state.plan = v;
-  }
-  return state;
 }
+
+export async function readState(owner: string): Promise<State> {
+  const supabase = await getSupabase();
+
+  // 1. Verificar se o workspace do usuário existe
+  let { data: ws, error: wsErr } = await supabase
+    .from("workspaces")
+    .select("revision, last_action")
+    .eq("owner", owner)
+    .maybeSingle();
+
+  if (wsErr) {
+    console.error("Erro ao consultar workspace:", wsErr);
+    throw new Error("Erro ao acessar dados do usuário.");
+  }
+
+  // Se não existir, inicializar o workspace, estoque e plano do usuário
+  if (!ws) {
+    const { error: insertWsErr } = await supabase
+      .from("workspaces")
+      .insert({ owner, revision: 0 });
+
+    if (insertWsErr) {
+      console.error("Erro ao criar workspace:", insertWsErr);
+      throw new Error("Erro ao inicializar espaço de trabalho.");
+    }
+
+    // Inicializar itens de estoque padrão
+    const stockToInsert = seed.stock.map((item) => ({
+      id: item.id,
+      owner,
+      name: item.name,
+      group: item.group,
+      unit: item.unit,
+      qty: item.qty,
+      minimum: item.minimum,
+      target: item.target,
+    }));
+    await supabase.from("stock_items").insert(stockToInsert);
+
+    // Inicializar plano padrão
+    await supabase.from("plans").insert({
+      owner,
+      ...defaultPlan,
+    });
+
+    ws = { revision: 0, last_action: null };
+  }
+
+  // 2. Buscar lançamentos, estoque e plano em paralelo
+  const [entriesRes, stockRes, planRes] = await Promise.all([
+    supabase
+      .from("entries")
+      .select("*")
+      .eq("owner", owner)
+      .order("order", { ascending: true }),
+    supabase.from("stock_items").select("*").eq("owner", owner),
+    supabase.from("plans").select("*").eq("owner", owner).maybeSingle(),
+  ]);
+
+  if (entriesRes.error) console.error("Erro ao buscar lançamentos:", entriesRes.error);
+  if (stockRes.error) console.error("Erro ao buscar estoque:", stockRes.error);
+
+  const entries: Entry[] = (entriesRes.data ?? []).map((e: any) => ({
+    id: e.id,
+    order: Number(e.order),
+    date: String(e.date),
+    description: e.description,
+    category: e.category,
+    type: e.type,
+    cents: Number(e.cents),
+    payment: e.payment,
+    status: e.status,
+  }));
+
+  const stock: Item[] = (stockRes.data ?? []).map((i: any) => ({
+    id: i.id,
+    name: i.name,
+    group: i.group,
+    unit: i.unit,
+    qty: i.qty !== null && i.qty !== undefined ? Number(i.qty) : null,
+    minimum: i.minimum !== null && i.minimum !== undefined ? Number(i.minimum) : null,
+    target: i.target !== null && i.target !== undefined ? Number(i.target) : null,
+  }));
+
+  const plan: Plan = planRes.data
+    ? {
+        orders: Number(planRes.data.orders),
+        ticket: Number(planRes.data.ticket),
+        days: Number(planRes.data.days),
+        food: Number(planRes.data.food),
+        pack: Number(planRes.data.pack),
+        delivery: Number(planRes.data.delivery),
+        fee: Number(planRes.data.fee),
+        fixed: Number(planRes.data.fixed),
+        ads: Number(planRes.data.ads),
+        margin: Number(planRes.data.margin),
+      }
+    : defaultPlan;
+
+  return {
+    revision: Number(ws.revision),
+    entries,
+    stock,
+    plan,
+  };
+}
+
 const textValue = z.string().trim().min(1).max(120);
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,72}$/);
 const number = z.number().finite().min(0).max(1e7);
@@ -68,6 +137,7 @@ const date = z
     return Number.isFinite(t.getTime()) && t.toISOString().slice(0, 10) === d;
   }, "Data inválida.");
 const payment = z.string().refine((v) => methods.includes(v));
+
 const entry = z.object({
   id,
   date,
@@ -78,6 +148,7 @@ const entry = z.object({
   payment,
   status: z.enum(["Pendente", "Concluído"]),
 });
+
 const item = z.object({
   id,
   name: textValue,
@@ -87,6 +158,7 @@ const item = z.object({
   minimum: number,
   target: number,
 });
+
 const plan = z.object({
   orders: number.int().positive(),
   ticket: number.positive(),
@@ -99,6 +171,7 @@ const plan = z.object({
   ads: number,
   margin: number.max(99.99),
 });
+
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("entry"), data: entry }),
   z.object({ kind: z.literal("deleteEntry"), id }),
@@ -114,11 +187,13 @@ const change = z.discriminatedUnion("kind", [
     payment,
   }),
 ]);
+
 const request = z.object({
   revision: z.number().int().nonnegative(),
   actionId: z.string().uuid(),
   change,
 });
+
 export class InputError extends Error {
   constructor(
     message: string,
@@ -127,6 +202,7 @@ export class InputError extends Error {
     super(message);
   }
 }
+
 export async function mutate(owner: string, raw: unknown) {
   const validation = request.safeParse(raw);
   if (!validation.success)
@@ -134,27 +210,22 @@ export async function mutate(owner: string, raw: unknown) {
       "Confira os valores, a data e os campos obrigatórios.",
     );
   const { revision, actionId, change: c } = validation.data;
-  const state = await readState(owner),
-    db = database();
-  const meta = await db
-    .prepare("SELECT last_action FROM workspaces WHERE owner=?")
-    .bind(owner)
-    .first();
+  const state = await readState(owner);
+  const supabase = await getSupabase();
+
+  const { data: meta } = await supabase
+    .from("workspaces")
+    .select("revision, last_action")
+    .eq("owner", owner)
+    .single();
+
   if (meta?.last_action === actionId) return state;
-  if (state.revision !== revision)
+  if (meta && meta.revision !== revision)
     throw new InputError(
       "Os dados mudaram em outra janela. Revise os valores atualizados e salve novamente.",
       409,
     );
-  const ops: D1PreparedStatement[] = [];
-  const upsert = (kind: string, recordId: string, value: Entry | Item | Plan) =>
-    ops.push(
-      db
-        .prepare(
-          "INSERT INTO records(owner,kind,id,value) SELECT ?,?,?,? WHERE (SELECT revision FROM workspaces WHERE owner=?)=? ON CONFLICT(owner,kind,id) DO UPDATE SET value=excluded.value",
-        )
-        .bind(owner, kind, recordId, JSON.stringify(value), owner, revision),
-    );
+
   if (c.kind === "entry") {
     const r = c.data;
     if (
@@ -165,17 +236,39 @@ export async function mutate(owner: string, raw: unknown) {
         "Para concluir, informe um valor maior que zero e uma categoria válida.",
       );
     const existing = state.entries.find((e) => e.id === r.id);
-    upsert("entry", r.id, { ...r, order: existing?.order ?? Date.now() });
+    const order = existing?.order ?? Date.now();
+
+    const { error: upsertErr } = await supabase.from("entries").upsert({
+      id: r.id,
+      owner,
+      order,
+      date: r.date,
+      description: r.description,
+      category: r.category,
+      type: r.type,
+      cents: r.cents,
+      payment: r.payment,
+      status: r.status,
+    });
+
+    if (upsertErr) {
+      console.error("Erro ao salvar lançamento:", upsertErr);
+      throw new Error("Erro ao salvar lançamento.");
+    }
   } else if (c.kind === "deleteEntry") {
     if (!state.entries.some((e) => e.id === c.id))
       throw new InputError("Lançamento não encontrado.");
-    ops.push(
-      db
-        .prepare(
-          "DELETE FROM records WHERE owner=? AND kind='entry' AND id=? AND (SELECT revision FROM workspaces WHERE owner=?)=?",
-        )
-        .bind(owner, c.id, owner, revision),
-    );
+
+    const { error: delErr } = await supabase
+      .from("entries")
+      .delete()
+      .eq("owner", owner)
+      .eq("id", c.id);
+
+    if (delErr) {
+      console.error("Erro ao excluir lançamento:", delErr);
+      throw new Error("Erro ao excluir lançamento.");
+    }
   } else if (c.kind === "item") {
     const i = c.data;
     if (i.target <= i.minimum)
@@ -196,7 +289,22 @@ export async function mutate(owner: string, raw: unknown) {
       )
     )
       throw new InputError("Já existe um item com esse nome.");
-    upsert("item", i.id, i);
+
+    const { error: itemErr } = await supabase.from("stock_items").upsert({
+      id: i.id,
+      owner,
+      name: i.name,
+      group: i.group,
+      unit: i.unit,
+      qty: i.qty,
+      minimum: i.minimum,
+      target: i.target,
+    });
+
+    if (itemErr) {
+      console.error("Erro ao salvar item no estoque:", itemErr);
+      throw new Error("Erro ao salvar item no estoque.");
+    }
   } else if (c.kind === "move") {
     const i = state.stock.find((i) => i.id === c.id);
     if (!i || i.qty === null)
@@ -213,10 +321,22 @@ export async function mutate(owner: string, raw: unknown) {
       throw new InputError(
         "A quantidade ultrapassa o saldo disponível ou o limite de estoque.",
       );
-    upsert("item", i.id, { ...i, qty });
-    if (c.direction === "in" && c.cents > 0)
-      upsert("entry", actionId, {
+
+    const { error: moveErr } = await supabase
+      .from("stock_items")
+      .update({ qty })
+      .eq("owner", owner)
+      .eq("id", i.id);
+
+    if (moveErr) {
+      console.error("Erro ao movimentar estoque:", moveErr);
+      throw new Error("Erro ao movimentar estoque.");
+    }
+
+    if (c.direction === "in" && c.cents > 0) {
+      const { error: autoEntryErr } = await supabase.from("entries").upsert({
         id: actionId,
+        owner,
         order: Date.now(),
         date: c.date,
         type: "Saída",
@@ -226,19 +346,49 @@ export async function mutate(owner: string, raw: unknown) {
         payment: c.payment,
         status: "Concluído",
       });
-  } else upsert("plan", "monthly", c.data);
-  ops.push(
-    db
-      .prepare(
-        "UPDATE workspaces SET revision=revision+1,last_action=? WHERE owner=? AND revision=?",
-      )
-      .bind(actionId, owner, revision),
-  );
-  const result = await db.batch(ops);
-  if (!result.at(-1)?.meta.changes)
+
+      if (autoEntryErr) {
+        console.error("Erro ao gerar lançamento de saída automática:", autoEntryErr);
+      }
+    }
+  } else if (c.kind === "plan") {
+    const { error: planErr } = await supabase.from("plans").upsert({
+      owner,
+      orders: c.data.orders,
+      ticket: c.data.ticket,
+      days: c.data.days,
+      food: c.data.food,
+      pack: c.data.pack,
+      delivery: c.data.delivery,
+      fee: c.data.fee,
+      fixed: c.data.fixed,
+      ads: c.data.ads,
+      margin: c.data.margin,
+    });
+
+    if (planErr) {
+      console.error("Erro ao salvar plano:", planErr);
+      throw new Error("Erro ao salvar plano.");
+    }
+  }
+
+  // Atualizar revisão no workspace para controle de concorrência
+  const { error: updateWsErr } = await supabase
+    .from("workspaces")
+    .update({
+      revision: revision + 1,
+      last_action: actionId,
+    })
+    .eq("owner", owner)
+    .eq("revision", revision);
+
+  if (updateWsErr) {
+    console.error("Erro ao atualizar revisão:", updateWsErr);
     throw new InputError(
       "Os dados mudaram em outra janela. Revise e tente novamente.",
       409,
     );
+  }
+
   return readState(owner);
 }
