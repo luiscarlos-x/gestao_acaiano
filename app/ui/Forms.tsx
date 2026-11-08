@@ -108,11 +108,55 @@ export function EntryForm({
   const [type, setType] = useState<Entry["type"]>(entry?.type ?? "Entrada"),
     [confirm, setConfirm] = useState(false);
   const [status, setStatus] = useState(entry?.status ?? "Concluído");
+
+  const [qty, setQty] = useState(1);
+  const [unitPrice, setUnitPrice] = useState<string>(() =>
+    entry ? (entry.cents / 100).toFixed(2) : "",
+  );
+  const [total, setTotal] = useState<string>(() =>
+    entry ? (entry.cents / 100).toFixed(2) : "",
+  );
+
+  function handleQtyChange(newQty: number) {
+    setQty(newQty);
+    const u = parseFloat(unitPrice.replace(",", "."));
+    if (!isNaN(u) && newQty > 0) {
+      setTotal((newQty * u).toFixed(2));
+    }
+  }
+
+  function handleUnitPriceChange(val: string) {
+    setUnitPrice(val);
+    const u = parseFloat(val.replace(",", "."));
+    if (!isNaN(u) && qty > 0) {
+      setTotal((qty * u).toFixed(2));
+    } else if (!val) {
+      setTotal("");
+    }
+  }
+
+  function handleTotalChange(val: string) {
+    setTotal(val);
+    const t = parseFloat(val.replace(",", "."));
+    if (!isNaN(t) && qty > 0) {
+      setUnitPrice((t / qty).toFixed(2));
+    } else if (!val) {
+      setUnitPrice("");
+    }
+  }
+
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
         const f = new FormData(e.currentTarget);
+        let description = String(f.get("description")).trim();
+        if (qty > 1 && !new RegExp(`\\b${qty}\\b`).test(description)) {
+          description = `${description} (${qty} un)`;
+        }
+        const totalNum = parseFloat(total.replace(",", "."));
+        const cents = Math.round((isNaN(totalNum) ? 0 : totalNum) * 100);
+
         if (
           await save(
             {
@@ -120,12 +164,12 @@ export function EntryForm({
               data: {
                 id: entryId,
                 date: String(f.get("date")),
-                description: String(f.get("description")).trim(),
+                description,
                 category: String(f.get("category")),
                 type,
                 status,
                 payment: String(f.get("payment")),
-                cents: Math.round(Number(f.get("value")) * 100),
+                cents,
               },
             },
             "Lançamento salvo.",
@@ -168,19 +212,63 @@ export function EntryForm({
             }
           />
         </label>
+
         <label>
-          Valor (R$)
+          Quantidade
+          <input
+            type="number"
+            min="1"
+            step="1"
+            required
+            value={qty}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              handleQtyChange(isNaN(val) || val < 1 ? 1 : val);
+            }}
+          />
+        </label>
+
+        <label>
+          Valor unitário (R$)
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0,00"
+            value={unitPrice}
+            onChange={(e) => handleUnitPriceChange(e.target.value)}
+          />
+        </label>
+
+        <label className="wide">
+          Valor total (R$)
           <input
             required
             name="value"
             type="number"
             min={status === "Pendente" ? 0 : 0.01}
             max="999999999.99"
-            step=".01"
-            defaultValue={entry ? entry.cents / 100 : ""}
+            step="0.01"
+            value={total}
+            onChange={(e) => handleTotalChange(e.target.value)}
             placeholder="0,00"
+            style={{ fontWeight: 650, color: "var(--purple)" }}
           />
+          {qty > 1 && total && (
+            <small
+              style={{
+                color: "var(--muted)",
+                fontSize: "11.5px",
+                marginTop: "2px",
+              }}
+            >
+              Cálculo: {qty} un ×{" "}
+              {brl(Math.round((parseFloat(unitPrice) || 0) * 100))} ={" "}
+              {brl(Math.round((parseFloat(total) || 0) * 100))}
+            </small>
+          )}
         </label>
+
         <label>
           Data
           <input
@@ -190,6 +278,7 @@ export function EntryForm({
             defaultValue={entry?.date ?? today()}
           />
         </label>
+
         <label>
           Categoria
           <select
@@ -204,6 +293,7 @@ export function EntryForm({
             ))}
           </select>
         </label>
+
         <label>
           Pagamento
           <select name="payment" defaultValue={entry?.payment ?? "PIX"}>
@@ -212,7 +302,8 @@ export function EntryForm({
             ))}
           </select>
         </label>
-        <label className="wide">
+
+        <label>
           Status
           <select
             value={status}
