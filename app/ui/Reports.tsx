@@ -410,10 +410,6 @@ export function Spending({
               </button>
             ))}
           </div>
-          <p className="spending-hint">
-            Passe o mouse para ver os valores. Clique ou toque para ver os
-            lançamentos.
-          </p>
         </>
       ) : (
         <div className="empty">Nenhuma despesa paga no período.</div>
