@@ -596,18 +596,36 @@ h3 {
   box-shadow: 0 4px 10px #25172d1b;
 }
 .donut {
+  position: relative;
   width: 119px;
   height: 119px;
   margin: 14px auto 11px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  transform: rotate(-90deg);
 }
-.donut > div {
-  transform: rotate(90deg);
-  width: 89px;
-  height: 89px;
+.donut svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.donut-slice {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.donut-slice:hover,
+.donut-slice:focus-visible {
+  opacity: 0.75;
+  outline: none;
+}
+.donut-slice:focus-visible {
+  filter: drop-shadow(0 0 2px #24142c);
+}
+.donut-center {
+  width: 74%;
+  height: 74%;
   border-radius: 50%;
   background: white;
   display: flex;
@@ -615,35 +633,136 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 5px;
+  pointer-events: none;
 }
 .donut small {
   font-size: 9px;
   color: #7b7d78;
 }
 .donut b {
-  font-size: 15.5px;
+  font-size: clamp(10px, 1.05vw, 15.5px);
   letter-spacing: -0.65px;
+}
+.spending-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  z-index: 2;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #28252e;
+  color: #fff;
+  font-size: 11px;
+  box-shadow: 0 4px 10px #25172d1b;
+  pointer-events: none;
 }
 .legend {
   display: grid;
   gap: 7px;
 }
-.legend > div {
+.legend > button {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  text-align: left;
   font-size: 11px;
   color: #555e54;
+  border-radius: 4px;
+}
+.legend > button:hover,
+.legend > button:focus-visible {
+  background: #f1f5ed;
+  outline: 2px solid #8b42b1;
+  outline-offset: 3px;
 }
 .legend i {
   width: 8px;
   height: 8px;
+  flex: 0 0 8px;
   border-radius: 3px;
 }
 .legend strong {
   margin-left: auto;
   font-size: 11px;
   color: #343b33;
+}
+.spending-hint {
+  margin-top: 12px;
+  color: #757c72;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.spending-detail-period {
+  margin: -8px 0 14px;
+  color: #6d7569;
+  font-size: 12px;
+}
+.spending-detail-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f5f2f8;
+  color: #55515a;
+  font-size: 12px;
+}
+.spending-detail-summary strong {
+  color: #292430;
+  font-size: 21px;
+}
+.spending-detail-summary small {
+  font-size: 11px;
+}
+.spending-detail-heading {
+  margin: 18px 0 8px;
+  font-size: 14px;
+}
+.spending-detail-heading span {
+  color: #747a71;
+  font-weight: 400;
+}
+.spending-detail-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.spending-detail-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid #e9ece6;
+  font-size: 12px;
+}
+.spending-detail-list li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.spending-detail-list li strong {
+  overflow-wrap: anywhere;
+}
+.spending-detail-list li small {
+  color: #777e74;
+}
+.spending-detail-list li > b {
+  white-space: nowrap;
+}
+.spending-detail-action {
+  margin-top: 17px;
+  gap: 6px;
 }
 .tablebox {
   overflow: hidden;
@@ -1217,11 +1336,7 @@ h3 {
     width: 142px;
     height: 142px;
   }
-  .donut > div {
-    width: 107px;
-    height: 107px;
-  }
-  .legend > div,
+  .legend > button,
   .legend strong {
     font-size: 12px;
   }
@@ -1337,10 +1452,6 @@ h3 {
   .donut {
     width: 105px;
     height: 105px;
-  }
-  .donut > div {
-    width: 79px;
-    height: 79px;
   }
   .donut b {
     font-size: 13px;
@@ -1493,6 +1604,9 @@ h3 {
   .spending .legend {
     margin: 8px 6px;
     gap: 11px;
+  }
+  .spending-hint {
+    grid-column: 1 / -1;
   }
   .spending .donut {
     margin: 14px auto 2px;

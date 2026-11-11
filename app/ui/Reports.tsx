@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { brl, numberPt, sortEntries, dayLabel } from "../../lib/gestao/model";
 import type { Entry } from "../../lib/gestao/model";
+import { Modal } from "./Forms";
 
 export function Totals({ entries }: { entries: Entry[] }) {
   const paid = entries.filter((i) => i.status === "Concluído");
@@ -265,56 +266,199 @@ const colors = [
   "#6b79ae",
   "#a1a4a9",
 ];
-export function Spending({ entries }: { entries: Entry[] }) {
+const categoryColors: Record<string, string> = {
+  Insumos: colors[0],
+  Embalagens: colors[1],
+  Entrega: colors[2],
+  "Custos fixos": colors[3],
+  Marketing: colors[4],
+  Taxas: colors[5],
+  "Outras saídas": colors[6],
+};
+
+function categoryColor(category: string) {
+  if (categoryColors[category]) return categoryColors[category];
+  // Keep the color of a historical or newly added category stable too.
+  let hash = 0;
+  for (const char of category) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return colors[hash % colors.length];
+}
+
+function percentage(value: number, total: number) {
+  return numberPt(Math.round((value / total) * 1000) / 10) + "%";
+}
+
+export function Spending({
+  entries,
+  periodLabel,
+  onCategorySelect,
+}: {
+  entries: Entry[];
+  periodLabel: string;
+  onCategorySelect: (category: string) => void;
+}) {
+  const [active, setActive] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const all = new Map<string, number>();
-  entries
-    .filter((e) => e.type === "Saída" && e.status === "Concluído")
-    .forEach((e) => all.set(e.category, (all.get(e.category) ?? 0) + e.cents));
+  const paidExpenses = entries.filter(
+    (e) => e.type === "Saída" && e.status === "Concluído",
+  );
+  paidExpenses.forEach((e) =>
+    all.set(e.category, (all.get(e.category) ?? 0) + e.cents),
+  );
   const cats = [...all].sort((a, b) => b[1] - a[1]),
     total = cats.reduce((s, r) => s + r[1], 0);
-  let angle = 0;
-  const arc = cats
-    .map(([_, v], i) => {
-      const start = angle;
-      angle += (v / total) * 100;
-      return colors[i % colors.length] + " " + start + "% " + angle + "%";
-    })
-    .join(",");
+  const circumference = 2 * Math.PI * 44;
+  let offset = 0;
+  const slices = cats.map(([category, value]) => {
+    const length = (value / total) * circumference;
+    const slice = { category, value, length, offset };
+    offset += length;
+    return slice;
+  });
+  const activeValue = active ? all.get(active) : undefined;
+  const selectedValue = selected ? all.get(selected) : undefined;
+  const selectedEntries = selected
+    ? sortEntries(paidExpenses.filter((e) => e.category === selected)).reverse()
+    : [];
+  const openCategory = (category: string) => {
+    setActive(null);
+    setSelected(category);
+  };
   return (
     <section className="box spending">
       <div className="widget-head">
         <div>
           <h3>Despesas por categoria</h3>
-          <p>Distribuição das saídas pagas</p>
+          <p>Saídas concluídas no período selecionado</p>
         </div>
       </div>
       {total ? (
         <>
-          <div
-            className="donut"
-            role="img"
-            aria-label={"Total de saídas pagas " + brl(total)}
-            style={{ background: "conic-gradient(" + arc + ")" }}
-          >
-            <div>
+          <div className="donut">
+            <svg
+              viewBox="0 0 100 100"
+              role="group"
+              aria-label={`Despesas por categoria. Total de saídas concluídas: ${brl(total)}.`}
+            >
+              {slices.map(({ category, value, length, offset: sliceOffset }) => (
+                <circle
+                  key={category}
+                  className="donut-slice"
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  fill="none"
+                  stroke={categoryColor(category)}
+                  strokeWidth="12"
+                  strokeDasharray={`${length} ${circumference}`}
+                  strokeDashoffset={-sliceOffset}
+                  transform="rotate(-90 50 50)"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${category}: ${brl(value)}, ${percentage(value, total)} das saídas concluídas. Abrir lançamentos.`}
+                  aria-describedby={
+                    active === category ? "spending-tooltip" : undefined
+                  }
+                  onMouseEnter={() => setActive(category)}
+                  onMouseLeave={() => setActive(null)}
+                  onFocus={() => setActive(category)}
+                  onBlur={() => setActive(null)}
+                  onClick={() => openCategory(category)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openCategory(category);
+                    }
+                  }}
+                />
+              ))}
+            </svg>
+            <div className="donut-center" aria-hidden="true">
               <small>Total de saídas</small>
               <b>{brl(total)}</b>
             </div>
-          </div>
-          <div className="legend">
-            {cats.map(([cat, v], i) => (
-              <div key={cat}>
-                <i style={{ background: colors[i % colors.length] }} />
-                <span>{cat}</span>
+            {active && activeValue !== undefined && (
+              <div
+                className="spending-tip"
+                id="spending-tooltip"
+                role="tooltip"
+              >
+                <span>{active}</span>
                 <strong>
-                  {numberPt(Math.round((v / total) * 1000) / 10)}%
+                  {brl(activeValue)} · {percentage(activeValue, total)}
                 </strong>
               </div>
+            )}
+          </div>
+          <div className="legend" aria-label="Categorias de despesas">
+            {cats.map(([cat, v]) => (
+              <button
+                type="button"
+                key={cat}
+                onMouseEnter={() => setActive(cat)}
+                onMouseLeave={() => setActive(null)}
+                onFocus={() => setActive(cat)}
+                onBlur={() => setActive(null)}
+                onClick={() => openCategory(cat)}
+                aria-label={`${cat}: ${brl(v)}, ${percentage(v, total)} das saídas concluídas. Abrir lançamentos.`}
+                aria-describedby={active === cat ? "spending-tooltip" : undefined}
+              >
+                <i style={{ background: categoryColor(cat) }} />
+                <span>{cat}</span>
+                <strong>{percentage(v, total)}</strong>
+              </button>
             ))}
           </div>
+          <p className="spending-hint">
+            Passe o mouse para ver os valores. Clique ou toque para ver os
+            lançamentos.
+          </p>
         </>
       ) : (
         <div className="empty">Nenhuma despesa paga no período.</div>
+      )}
+      {selected && selectedValue !== undefined && (
+        <Modal title={`Despesas · ${selected}`} close={() => setSelected(null)}>
+          <p className="spending-detail-period">Saídas concluídas · {periodLabel}</p>
+          <div className="spending-detail-summary">
+            <span>Total da categoria</span>
+            <strong>{brl(selectedValue)}</strong>
+            <small>
+              {percentage(selectedValue, total)} das saídas concluídas no período
+            </small>
+          </div>
+          <h3 className="spending-detail-heading">
+            Lançamentos <span>({selectedEntries.length})</span>
+          </h3>
+          <ul className="spending-detail-list">
+            {selectedEntries.map((entry) => (
+              <li key={entry.id}>
+                <div>
+                  <strong>{entry.description}</strong>
+                  <small>
+                    {dayLabel(entry.date, {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })} · {entry.payment}
+                  </small>
+                </div>
+                <b>{brl(entry.cents)}</b>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="secondary spending-detail-action"
+            onClick={() => {
+              setSelected(null);
+              onCategorySelect(selected);
+            }}
+          >
+            Ver no fluxo de caixa <ArrowRight size={15} />
+          </button>
+        </Modal>
       )}
     </section>
   );

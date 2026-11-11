@@ -536,7 +536,16 @@ export default function Dashboard({ initial, userEmail }: { initial: State | nul
                 <>
                   <div className="charts">
                     <Flow entries={shown} prior={prior} />
-                    <Spending entries={shown} />
+                    <Spending
+                      entries={shown}
+                      periodLabel={periodName(period)}
+                      onCategorySelect={(category) => {
+                        go("cash");
+                        setType("Saída");
+                        setStatus("Concluído");
+                        setCashCategory(category);
+                      }}
+                    />
                   </div>
                   <EntryTable
                     entries={[...shown].reverse().slice(0, 5)}
