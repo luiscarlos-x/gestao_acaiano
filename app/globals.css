@@ -1192,6 +1192,19 @@ h3 {
   background: #eff6e4;
   border-color: #a3be7c;
 }
+.period-shortcuts {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--edge);
+}
+.period-shortcuts .period-opt:last-child {
+  margin-bottom: 0;
+}
+@media (max-width: 480px) {
+  .period-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .modal h4 {
   font-size: 13px;
   margin-bottom: 12px;

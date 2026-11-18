@@ -38,6 +38,8 @@ import {
   today,
 } from "../../lib/gestao/model";
 import { Totals, Flow, Spending, Revenue, EntryTable } from "./Reports";
+import { weekPeriod, withinPeriod } from "../../lib/gestao/period";
+import type { Period } from "../../lib/gestao/period";
 import { Modal, EntryForm, ItemForm, MoveForm, Calculator } from "./Forms";
 import type { Action } from "./Forms";
 
@@ -56,7 +58,6 @@ type ModalState =
   | { kind: "period" }
   | { kind: "alerts" }
   | null;
-type Period = { start: string; end: string };
 function forMonth(m: string): Period {
   const [year, month] = m.split("-").map(Number);
   return {
@@ -91,9 +92,17 @@ function PeriodForm({
 }) {
   const [start, setStart] = useState(period.start),
     [end, setEnd] = useState(period.end);
+  const currentDay = today();
+  const weeks = [
+    { label: "Esta semana", range: weekPeriod(currentDay) },
+    { label: "Semana passada", range: weekPeriod(currentDay, -1) },
+  ];
+  const valid = Boolean(start && end && start <= end);
+  const isSelected = (range: Period) =>
+    period.start === range.start && period.end === range.end;
   const months = [
     ...new Set([
-      today().slice(0, 7),
+      currentDay.slice(0, 7),
       ...entries.map((e) => e.date.slice(0, 7)),
     ]),
   ]
@@ -101,35 +110,19 @@ function PeriodForm({
     .reverse();
   return (
     <>
-      <div className="period-opt">
-        <button
-          className="secondary"
-          onClick={() => apply({ start: "", end: "" })}
-        >
-          Todo o período
-        </button>
-        {months.slice(0, 8).map((m) => (
-          <button
-            className={
-              "secondary " + (period.start === m + "-01" ? "opt-active" : "")
-            }
-            key={m}
-            onClick={() => apply(forMonth(m))}
-          >
-            {monthLabel(m)}
-          </button>
-        ))}
-      </div>
+      <p className="modal-desc">
+        Escolha as datas para ver as receitas e despesas do mesmo período.
+      </p>
       <form
+        className="period-form"
         onSubmit={(e) => {
           e.preventDefault();
-          apply({ start, end });
+          if (valid) apply({ start, end });
         }}
       >
-        <h4>Período personalizado</h4>
         <div className="form-grid">
           <label>
-            De
+            Data inicial
             <input
               type="date"
               required
@@ -139,7 +132,7 @@ function PeriodForm({
             />
           </label>
           <label>
-            Até
+            Data final
             <input
               type="date"
               required
@@ -149,10 +142,51 @@ function PeriodForm({
             />
           </label>
         </div>
+        <p className="helper">A data inicial e a final entram no cálculo.</p>
         <div className="form-foot">
-          <button className="primary">Aplicar período</button>
+          <button className="primary" type="submit" disabled={!valid}>
+            Aplicar período
+          </button>
         </div>
       </form>
+      <div className="period-shortcuts">
+        <h4>Por semana · segunda a domingo</h4>
+        <div className="period-opt">
+          {weeks.map(({ label, range }) => (
+            <button
+              type="button"
+              className={"secondary " + (isSelected(range) ? "opt-active" : "")}
+              key={label}
+              aria-pressed={isSelected(range)}
+              onClick={() => apply(range)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <h4>Outros períodos</h4>
+        <div className="period-opt">
+          <button
+            type="button"
+            className={"secondary " + (isSelected({ start: "", end: "" }) ? "opt-active" : "")}
+            aria-pressed={isSelected({ start: "", end: "" })}
+            onClick={() => apply({ start: "", end: "" })}
+          >
+            Todo o período
+          </button>
+          {months.slice(0, 8).map((m) => (
+            <button
+              type="button"
+              className={"secondary " + (isSelected(forMonth(m)) ? "opt-active" : "")}
+              key={m}
+              aria-pressed={isSelected(forMonth(m))}
+              onClick={() => apply(forMonth(m))}
+            >
+              {monthLabel(m)}
+            </button>
+          ))}
+        </div>
+      </div>
     </>
   );
 }
@@ -318,11 +352,7 @@ export default function Dashboard({ initial, userEmail }: { initial: State | nul
     }
   }
   const entries = sortEntries(data?.entries ?? []),
-    shown = entries.filter(
-      (e) =>
-        (!period.start || e.date >= period.start) &&
-        (!period.end || e.date <= period.end),
-    );
+    shown = entries.filter((e) => withinPeriod(e.date, period));
   const stock = [...(data?.stock ?? [])].sort((a, b) =>
     a.name.localeCompare(b.name, "pt-BR"),
   );
@@ -348,7 +378,12 @@ export default function Dashboard({ initial, userEmail }: { initial: State | nul
     : 0;
   const pageInfo = navigation.find((n) => n.id === page)!;
   const periodBtn = (
-    <button className="period-btn" onClick={() => open({ kind: "period" })}>
+    <button
+      className="period-btn"
+      aria-label={"Filtrar período: " + periodName(period)}
+      aria-haspopup="dialog"
+      onClick={() => open({ kind: "period" })}
+    >
       <CalendarDays size={15} />
       {periodName(period)}
       <ChevronDown size={14} />
