@@ -37,7 +37,7 @@ import {
   stockState,
   today,
 } from "../../lib/gestao/model";
-import { Totals, Flow, Spending, EntryTable } from "./Reports";
+import { Totals, Flow, Spending, Revenue, EntryTable } from "./Reports";
 import { Modal, EntryForm, ItemForm, MoveForm, Calculator } from "./Forms";
 import type { Action } from "./Forms";
 
@@ -536,6 +536,16 @@ export default function Dashboard({ initial, userEmail }: { initial: State | nul
                 <>
                   <div className="charts">
                     <Flow entries={shown} prior={prior} />
+                    <Revenue
+                      entries={shown}
+                      periodLabel={periodName(period)}
+                      onCategorySelect={(category) => {
+                        go("cash");
+                        setType("Entrada");
+                        setStatus("Concluído");
+                        setCashCategory(category);
+                      }}
+                    />
                     <Spending
                       entries={shown}
                       periodLabel={periodName(period)}

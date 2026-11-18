@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -267,6 +267,10 @@ const colors = [
   "#a1a4a9",
 ];
 const categoryColors: Record<string, string> = {
+  "Venda de açaí": colors[3],
+  "Açaí 300 ml": colors[1],
+  "Açaí 500 ml": colors[0],
+  "Outras entradas": colors[6],
   Insumos: colors[0],
   Embalagens: colors[1],
   Entrega: colors[2],
@@ -288,22 +292,38 @@ function percentage(value: number, total: number) {
   return numberPt(Math.round((value / total) * 1000) / 10) + "%";
 }
 
-export function Spending({
-  entries,
-  periodLabel,
-  onCategorySelect,
-}: {
+type CategoryChartProps = {
   entries: Entry[];
   periodLabel: string;
   onCategorySelect: (category: string) => void;
-}) {
+};
+
+export function Spending(props: CategoryChartProps) {
+  return <CategoryChart {...props} type="Saída" />;
+}
+
+export function Revenue(props: CategoryChartProps) {
+  return <CategoryChart {...props} type="Entrada" />;
+}
+
+function CategoryChart({
+  entries,
+  periodLabel,
+  onCategorySelect,
+  type,
+}: CategoryChartProps & { type: Entry["type"] }) {
+  const tooltipId = useId();
+  const income = type === "Entrada";
+  const title = income ? "Receitas" : "Despesas";
+  const movement = income ? "entradas" : "saídas";
+  const completedLabel = income ? "Entradas concluídas" : "Saídas concluídas";
   const [active, setActive] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const all = new Map<string, number>();
-  const paidExpenses = entries.filter(
-    (e) => e.type === "Saída" && e.status === "Concluído",
+  const completedEntries = entries.filter(
+    (e) => e.type === type && e.status === "Concluído",
   );
-  paidExpenses.forEach((e) =>
+  completedEntries.forEach((e) =>
     all.set(e.category, (all.get(e.category) ?? 0) + e.cents),
   );
   const cats = [...all].sort((a, b) => b[1] - a[1]),
@@ -319,7 +339,7 @@ export function Spending({
   const activeValue = active ? all.get(active) : undefined;
   const selectedValue = selected ? all.get(selected) : undefined;
   const selectedEntries = selected
-    ? sortEntries(paidExpenses.filter((e) => e.category === selected)).reverse()
+    ? sortEntries(completedEntries.filter((e) => e.category === selected)).reverse()
     : [];
   const openCategory = (category: string) => {
     setActive(null);
@@ -329,8 +349,8 @@ export function Spending({
     <section className="box spending">
       <div className="widget-head">
         <div>
-          <h3>Despesas por categoria</h3>
-          <p>Saídas concluídas no período selecionado</p>
+          <h3>{title} por categoria</h3>
+          <p>{completedLabel} no período selecionado</p>
         </div>
       </div>
       {total ? (
@@ -339,7 +359,7 @@ export function Spending({
             <svg
               viewBox="0 0 100 100"
               role="group"
-              aria-label={`Despesas por categoria. Total de saídas concluídas: ${brl(total)}.`}
+              aria-label={`${title} por categoria. Total de ${movement} concluídas: ${brl(total)}.`}
             >
               {slices.map(({ category, value, length, offset: sliceOffset }) => (
                 <circle
@@ -356,9 +376,9 @@ export function Spending({
                   transform="rotate(-90 50 50)"
                   role="button"
                   tabIndex={0}
-                  aria-label={`${category}: ${brl(value)}, ${percentage(value, total)} das saídas concluídas. Abrir lançamentos.`}
+                  aria-label={`${category}: ${brl(value)}, ${percentage(value, total)} das ${movement} concluídas. Abrir lançamentos.`}
                   aria-describedby={
-                    active === category ? "spending-tooltip" : undefined
+                    active === category ? tooltipId : undefined
                   }
                   onMouseEnter={() => setActive(category)}
                   onMouseLeave={() => setActive(null)}
@@ -375,13 +395,13 @@ export function Spending({
               ))}
             </svg>
             <div className="donut-center" aria-hidden="true">
-              <small>Total de saídas</small>
+              <small>Total de {movement}</small>
               <b>{brl(total)}</b>
             </div>
             {active && activeValue !== undefined && (
               <div
                 className="spending-tip"
-                id="spending-tooltip"
+                id={tooltipId}
                 role="tooltip"
               >
                 <span>{active}</span>
@@ -391,7 +411,7 @@ export function Spending({
               </div>
             )}
           </div>
-          <div className="legend" aria-label="Categorias de despesas">
+          <div className="legend" aria-label={`Categorias de ${title.toLowerCase()}`}>
             {cats.map(([cat, v]) => (
               <button
                 type="button"
@@ -401,8 +421,8 @@ export function Spending({
                 onFocus={() => setActive(cat)}
                 onBlur={() => setActive(null)}
                 onClick={() => openCategory(cat)}
-                aria-label={`${cat}: ${brl(v)}, ${percentage(v, total)} das saídas concluídas. Abrir lançamentos.`}
-                aria-describedby={active === cat ? "spending-tooltip" : undefined}
+                aria-label={`${cat}: ${brl(v)}, ${percentage(v, total)} das ${movement} concluídas. Abrir lançamentos.`}
+                aria-describedby={active === cat ? tooltipId : undefined}
               >
                 <i style={{ background: categoryColor(cat) }} />
                 <span>{cat}</span>
@@ -412,16 +432,18 @@ export function Spending({
           </div>
         </>
       ) : (
-        <div className="empty">Nenhuma despesa paga no período.</div>
+        <div className="empty">
+          {income ? "Nenhuma receita recebida no período." : "Nenhuma despesa paga no período."}
+        </div>
       )}
       {selected && selectedValue !== undefined && (
-        <Modal title={`Despesas · ${selected}`} close={() => setSelected(null)}>
-          <p className="spending-detail-period">Saídas concluídas · {periodLabel}</p>
+        <Modal title={`${title} · ${selected}`} close={() => setSelected(null)}>
+          <p className="spending-detail-period">{completedLabel} · {periodLabel}</p>
           <div className="spending-detail-summary">
             <span>Total da categoria</span>
             <strong>{brl(selectedValue)}</strong>
             <small>
-              {percentage(selectedValue, total)} das saídas concluídas no período
+              {percentage(selectedValue, total)} das {movement} concluídas no período
             </small>
           </div>
           <h3 className="spending-detail-heading">

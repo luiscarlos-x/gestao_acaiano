@@ -57,7 +57,7 @@ export const methods = [
   "Outro",
 ];
 export const categories = {
-  Entrada: ["Venda de açaí", "Outras entradas"],
+  Entrada: ["Venda de açaí", "Açaí 300 ml", "Açaí 500 ml", "Outras entradas"],
   Saída: [
     "Insumos",
     "Embalagens",
